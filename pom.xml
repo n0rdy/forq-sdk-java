@@ -11,6 +11,7 @@
 
     <name>Forq SDK</name>
     <description>Forq SDK for Java</description>
+    <url>https://github.com/n0rdy/forq-sdk-java</url>
 
     <licenses>
         <license>
