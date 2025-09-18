@@ -43,7 +43,7 @@ public class ForqProducer {
         this.authSecret = authSecret;
     }
 
-    public void produce(NewMessageRequest newMessage, String queueName) throws IOException, ErrorResponseException {
+    public void sendMessage(NewMessageRequest newMessage, String queueName) throws IOException, ErrorResponseException {
         var url = String.format(forqServerUrl + PRODUCE_MESSAGE_ENDPOINT_URL_TEMPLATE, queueName);
 
         var bytes = objectMapper.writeValueAsBytes(newMessage);
