@@ -1,25 +1,31 @@
 package sh.forq.forqsdk.producer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import sh.forq.forqsdk.api.ErrorResponse;
 import sh.forq.forqsdk.api.ErrorResponseException;
 import sh.forq.forqsdk.api.NewMessageRequest;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 public class ForqProducer {
     private static final String PRODUCE_MESSAGE_ENDPOINT_URL_TEMPLATE = "/api/v1/queues/%s/messages";
 
-    private final OkHttpClient httpClient;
+    private static final String API_KEY_HEADER = "X-API-Key";
+
+    private final CloseableHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String forqServerUrl;
     private final String authSecret;
 
-    public ForqProducer(OkHttpClient httpClient,
+    public ForqProducer(CloseableHttpClient httpClient,
                         String forqServerUrl,
                         String authSecret) {
         Objects.requireNonNull(httpClient, "httpClient must not be null");
@@ -44,22 +50,30 @@ public class ForqProducer {
     }
 
     public void sendMessage(NewMessageRequest newMessage, String queueName) throws IOException, ErrorResponseException {
-        var url = String.format(forqServerUrl + PRODUCE_MESSAGE_ENDPOINT_URL_TEMPLATE, queueName);
-
-        var bytes = objectMapper.writeValueAsBytes(newMessage);
-        var request = new Request.Builder()
-            .url(url)
-            .post(RequestBody.create(bytes))
-            .addHeader("X-API-Key", authSecret)
-            .addHeader("Accept", "application/json")
-            .addHeader("Content-Type", "application/json")
-            .build();
-
-        try (var response = httpClient.newCall(request).execute()) {
-            if (response.code() != 204) {
-                var errorResponse = objectMapper.readValue(response.body().byteStream(), ErrorResponse.class);
-                throw new ErrorResponseException(response.code(), errorResponse);
-            }
+        Objects.requireNonNull(newMessage, "newMessage must not be null");
+        if (queueName == null || queueName.isBlank()) {
+            throw new IllegalArgumentException("queueName must not be null or blank");
         }
+        var url = String.format(forqServerUrl + PRODUCE_MESSAGE_ENDPOINT_URL_TEMPLATE,
+            URLEncoder.encode(queueName, StandardCharsets.UTF_8).replace("+", "%20"));
+
+        var request = new HttpPost(url);
+        request.addHeader(API_KEY_HEADER, authSecret);
+        request.addHeader("Accept", "application/json");
+        request.setEntity(new ByteArrayEntity(objectMapper.writeValueAsBytes(newMessage), ContentType.APPLICATION_JSON));
+
+        var result = httpClient.execute(request, response -> {
+            var entity = response.getEntity();
+            var body = entity != null ? EntityUtils.toByteArray(entity) : new byte[0];
+            return new RawResponse(response.getCode(), body);
+        });
+
+        if (result.code() != 204) {
+            var errorResponse = objectMapper.readValue(result.body(), ErrorResponse.class);
+            throw new ErrorResponseException(result.code(), errorResponse);
+        }
+    }
+
+    private record RawResponse(int code, byte[] body) {
     }
 }
