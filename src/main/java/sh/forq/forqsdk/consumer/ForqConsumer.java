@@ -12,6 +12,8 @@ import sh.forq.forqsdk.api.ErrorResponseException;
 import sh.forq.forqsdk.api.MessageResponse;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -63,7 +65,8 @@ public class ForqConsumer {
     }
 
     public Optional<MessageResponse> consumeOne(String queueName) throws IOException, ErrorResponseException {
-        var url = String.format(forqServerUrl + CONSUME_MESSAGE_ENDPOINT_URL_TEMPLATE, queueName);
+        requireNonBlank(queueName, "queueName");
+        var url = String.format(forqServerUrl + CONSUME_MESSAGE_ENDPOINT_URL_TEMPLATE, encodePathSegment(queueName));
 
         var request = new HttpGet(url);
         request.setConfig(CONSUME_REQUEST_CONFIG);
@@ -86,7 +89,8 @@ public class ForqConsumer {
      * other delivery.
      */
     public void ack(String queueName, MessageResponse message) throws IOException, ErrorResponseException {
-        var url = String.format(forqServerUrl + ACK_MESSAGE_ENDPOINT_URL_TEMPLATE, queueName, message.id());
+        validateAckNackArgs(queueName, message);
+        var url = String.format(forqServerUrl + ACK_MESSAGE_ENDPOINT_URL_TEMPLATE, encodePathSegment(queueName), message.id());
         sendAckNackRequest(url, message.receipt());
     }
 
@@ -96,8 +100,28 @@ public class ForqConsumer {
      * exact delivery via the message's receipt.
      */
     public void nack(String queueName, MessageResponse message) throws IOException, ErrorResponseException {
-        var url = String.format(forqServerUrl + NACK_MESSAGE_ENDPOINT_URL_TEMPLATE, queueName, message.id());
+        validateAckNackArgs(queueName, message);
+        var url = String.format(forqServerUrl + NACK_MESSAGE_ENDPOINT_URL_TEMPLATE, encodePathSegment(queueName), message.id());
         sendAckNackRequest(url, message.receipt());
+    }
+
+    // fail fast with clear messages instead of NPEs inside the HTTP client:
+    // a message without id/receipt was not produced by consumeOne
+    private static void validateAckNackArgs(String queueName, MessageResponse message) {
+        requireNonBlank(queueName, "queueName");
+        Objects.requireNonNull(message, "message must not be null - pass the message returned by consumeOne");
+        requireNonBlank(message.id(), "message.id");
+        requireNonBlank(message.receipt(), "message.receipt");
+    }
+
+    private static void requireNonBlank(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be null or blank");
+        }
+    }
+
+    private static String encodePathSegment(String segment) {
+        return URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private void sendAckNackRequest(String url, String receipt) throws IOException, ErrorResponseException {

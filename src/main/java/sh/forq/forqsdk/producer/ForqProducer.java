@@ -11,6 +11,8 @@ import sh.forq.forqsdk.api.ErrorResponseException;
 import sh.forq.forqsdk.api.NewMessageRequest;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 public class ForqProducer {
@@ -48,7 +50,12 @@ public class ForqProducer {
     }
 
     public void sendMessage(NewMessageRequest newMessage, String queueName) throws IOException, ErrorResponseException {
-        var url = String.format(forqServerUrl + PRODUCE_MESSAGE_ENDPOINT_URL_TEMPLATE, queueName);
+        Objects.requireNonNull(newMessage, "newMessage must not be null");
+        if (queueName == null || queueName.isBlank()) {
+            throw new IllegalArgumentException("queueName must not be null or blank");
+        }
+        var url = String.format(forqServerUrl + PRODUCE_MESSAGE_ENDPOINT_URL_TEMPLATE,
+            URLEncoder.encode(queueName, StandardCharsets.UTF_8).replace("+", "%20"));
 
         var request = new HttpPost(url);
         request.addHeader(API_KEY_HEADER, authSecret);

@@ -35,7 +35,8 @@ If you run many concurrent consumers from one JVM, raise the connection pool lim
 You can then use the producer to send messages:
 
 ```java
-var newMessage = new NewMessageRequest("I am going on an adventure!", 1757875397418);
+// processAfter is optional: pass a future Unix-ms timestamp for delayed delivery, or null for immediate
+var newMessage = new NewMessageRequest("I am going on an adventure!", System.currentTimeMillis() + 3_600_000);
 
 try {
     producer.sendMessage(newMessage, "my-queue");

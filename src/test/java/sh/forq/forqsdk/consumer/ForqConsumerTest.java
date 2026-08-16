@@ -125,6 +125,21 @@ class ForqConsumerTest {
     }
 
     @Test
+    void ackRejectsInvalidArguments() throws Exception {
+        try (var server = new TestHttpServer(204, "")) {
+            var consumer = new ForqConsumer(httpClient, server.url(), SECRET);
+
+            assertThrows(NullPointerException.class, () -> consumer.ack("orders", null));
+            assertThrows(IllegalArgumentException.class,
+                () -> consumer.ack("orders", new MessageResponse("msg-1", "x", null)));
+            assertThrows(IllegalArgumentException.class,
+                () -> consumer.ack("orders", new MessageResponse("msg-1", "x", " ")));
+            assertThrows(IllegalArgumentException.class,
+                () -> consumer.ack(" ", new MessageResponse("msg-1", "x", "r")));
+        }
+    }
+
+    @Test
     void trailingSlashInServerUrlIsTrimmed() throws Exception {
         try (var server = new TestHttpServer(204, "")) {
             var consumer = new ForqConsumer(httpClient, server.url() + "/", SECRET);
